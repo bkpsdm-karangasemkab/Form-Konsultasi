@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Layanan Konsultasi Kepegawaian</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+    <script>
+        // === KONFIGURASI GOOGLE APPS SCRIPT ===
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzvkRjSgLurE81atIJKOTy6p7DZGl4dDVcwZfcyIpvEWrsQd7gcxpjZCGhdhWk4WA/exec';
+        // ======================================
+
+        const showToast = (message, type = 'success') => {
+            const toast = document.getElementById('toastNotification');
+            toast.textContent = message;
+            toast.className = `fixed bottom-5 right-5 z-50 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium transition-all duration-300 transform translate-y-0 ${type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'}`;
+            setTimeout(() => {
+                toast.className += ' translate-y-24 opacity-0';
+            }, 4000);
+        };
+        
+        const renderList = async () => {
+            const listContainer = document.getElementById('listContainer');
+            
+            if(SCRIPT_URL === 'MASUKKAN_URL_WEB_APP_ANDA_DISINI') {
+                listContainer.innerHTML = `
+                    <div class="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-sm flex items-center space-x-3">
+                        <svg class="w-5 h-5 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <span>Silakan ganti variabel <b>SCRIPT_URL</b> di dalam kode HTML dengan URL Web App Apps Script Anda.</span>
+                    </div>`;
+                return;
+            }
+
+            listContainer.innerHTML = `
+                <div class="flex justify-center items-center py-8 space-x-2 text-blue-600">
+                    <svg class="animate-spin h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span class="text-sm font-medium">Memuat data konsultasi terbaru...</span>
+                </div>`;
+            try {
+                const response = await fetch(SCRIPT_URL);
+                const dataList = await response.json();
+                
+                listContainer.innerHTML = '';
+                if (dataList.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                            <p class="text-slate-400 text-sm">Belum ada riwayat konsultasi yang tercatat.</p>
+                        </div>`;
+                    return;
+                }
+
+                dataList.forEach((data) => {
+                    let badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                    if(data.status === 'Selesai') badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                    if(data.status === 'Diproses') badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                    if(data.status === 'Ditolak') badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+
+                    listContainer.innerHTML += `
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition duration-200 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-50 pb-3">
+                                <div>
+                                    <h3 class="font-bold text-slate-800 text-base">${data.nama}</h3>
+                                    <p class="text-xs text-slate-500 font-medium">${data.tempatTugas} • <span class="text-blue-600">${data.bidang}</span></p>
+                                </div>
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold border ${badgeColor} w-fit">${data.status}</span>
+                            </div>
+                            <div class="text-sm">
+                                <span class="inline-block bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium mb-2">${data.jenis}</span>
+                                <p class="text-slate-700 bg-slate-50/70 p-3 rounded-xl italic border border-slate-100">"${data.keterangan}"</p>
+                            </div>
+                            <div class="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100/50 text-xs text-slate-700">
+                                <span class="font-bold text-blue-900 block mb-1">Tanggapan / Solusi:</span>
+                                <p>${data.hasil && data.hasil !== '-' ? data.hasil : '<span class="text-slate-400 italic">Menunggu tanggapan dari tim kepegawaian...</span>'}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                listContainer.innerHTML = `<div class="bg-rose-50 text-rose-600 p-4 rounded-xl text-sm border border-rose-100">Gagal memuat data: ${err.message}</div>`;
+            }
+        };
+
+        const submitForm = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Mengirim Konsultasi...`;
+            btn.disabled = true;
+
+            const payload = {
+                action: 'create',
+                data: {
+                    nama: document.getElementById('nama').value,
+                    tempatTugas: document.getElementById('tempatTugas').value,
+                    bidang: document.getElementById('bidang').value,
+                    jenis: document.getElementById('jenis').value,
+                    keterangan: document.getElementById('keterangan').value
+                }
+            };
+
+            try {
+                await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                showToast("Konsultasi berhasil dikirim! Tim kami akan segera meninjau.", "success");
+                e.target.reset();
+                renderList();
+            } catch (err) { 
+                showToast("Gagal mengirim: " + err.message, "error");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('consultForm').addEventListener('submit', submitForm);
+            renderList();
+        });
+    </script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/50 min-h-screen text-slate-800 p-4 md:p-8">
+    
+    <!-- Toast Notification Container -->
+    <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300"></div>
+
+    <div class="max-w-3xl mx-auto space-y-8">
+        
+        <!-- Header Banner -->
+        <div class="bg-white/80 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+                <span class="bg-blue-100 text-blue-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">Layanan Kepegawaian</span>
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-900 mt-2">Portal Konsultasi Online</h1>
+                <p class="text-slate-500 text-sm mt-1">Ajukan pertanyaan atau konsultasi administrasi kepegawaian dengan mudah dan cepat.</p>
+            </div>
+            <div class="bg-blue-600 text-white p-4 rounded-2xl shadow-lg shadow-blue-500/30 hidden md:block">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+            </div>
+        </div>
+
+        <!-- Main Form Card -->
+        <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
+            <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-white">
+                <h2 class="font-semibold text-lg">Formulir Pengajuan Konsultasi</h2>
+                <p class="text-xs text-blue-100">Lengkapi data diri dan uraian permasalahan di bawah ini</p>
+            </div>
+            
+            <form id="consultForm" class="p-6 md:p-8 space-y-5">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Nama Lengkap & Gelar</label>
+                        <input type="text" id="nama" placeholder="Contoh: Kabayusa, S.I.Kom" required 
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Tempat Tugas / Instansi</label>
+                        <input type="text" id="tempatTugas" placeholder="Nama Unit Kerja" required 
+                            class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Tujuan Bidang / Layanan</label>
+                        <select id="bidang" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm">
+                            <option value="">-- Pilih Bidang Tujuan --</option>
+                            <option>Sekretariat</option>
+                            <option>Bidang PPI</option>
+                            <option>Bidang PKA</option>
+                            <option>Bidang MPPKA</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Jenis Layanan / Permasalahan</label>
+                        <select id="jenis" required class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm">
+                            <option value="">-- Pilih Jenis Layanan --</option>
+                            <option>Kenaikan Pangkat</option>
+                            <option>Pensiun</option>
+                            <option>Pengukuhan Gelar</option>
+                            <option>Peninjauan Masa Kerja</option>
+                            <option>Ijin Belajar</option>
+                            <option>Satya Lancana Karya Satya</option>
+                            <option>Disiplin</option>
+                            <option>Cuti</option>
+                            <option>Mutasi</option>
+                            <option>Masalah Data</option>
+                            <option>Angka Kredit</option>
+                            <option>Kinerja</option>
+                            <option>Jafung</option>
+                            <option>Lain-Lain</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Keterangan / Detail Masalah</label>
+                    <textarea id="keterangan" rows="4" placeholder="Jelaskan kendala atau pertanyaan konsultasi secara jelas..." required 
+                        class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"></textarea>
+                </div>
+
+                <button type="submit" id="submitBtn" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-semibold py-3.5 px-6 rounded-xl shadow-lg shadow-blue-500/25 transition duration-200 flex items-center justify-center space-x-2">
+                    <span>Kirim Pengajuan Konsultasi</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </button>
+            </form>
+        </div>
+
+        <!-- Consultation List Section -->
+        <div class="space-y-4 pt-4">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900">Riwayat Konsultasi Publik</h2>
+                    <p class="text-slate-500 text-xs">Daftar seluruh tiket pertanyaan dan status penanganannya.</p>
+                </div>
+                <button onclick="renderList()" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 p-2.5 rounded-xl shadow-sm text-xs font-medium transition flex items-center space-x-1.5">
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    <span>Refresh</span>
+                </button>
+            </div>
+            
+            <div id="listContainer" class="space-y-3">
+                <!-- Data akan dimuat secara dinamis disini -->
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>
