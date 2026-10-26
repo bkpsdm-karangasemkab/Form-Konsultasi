@@ -11,8 +11,12 @@
     </style>
     <script>
         // === KONFIGURASI GOOGLE APPS SCRIPT ===
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzvkRjSgLurE81atIJKOTy6p7DZGl4dDVcwZfcyIpvEWrsQd7gcxpjZCGhdhWk4WA/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzXITzPW6D5uyI-sfdq2s261jXL4N_0UZiR4Cr7fIwHVPCmWY55LMZGUio5UmPzngo/exec';
         // ======================================
+
+        let rawConsultations = [];
+        let pageSize = 2;
+        let currentPage = 1;
 
         const showToast = (message, type = 'success') => {
             const toast = document.getElementById('toastNotification');
@@ -42,46 +46,100 @@
                 </div>`;
             try {
                 const response = await fetch(SCRIPT_URL);
-                const dataList = await response.json();
-                
-                listContainer.innerHTML = '';
-                if (dataList.length === 0) {
-                    listContainer.innerHTML = `
-                        <div class="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                            <p class="text-slate-400 text-sm">Belum ada riwayat konsultasi yang tercatat.</p>
-                        </div>`;
-                    return;
-                }
-
-                dataList.forEach((data) => {
-                    let badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
-                    if(data.status === 'Selesai') badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                    if(data.status === 'Diproses') badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
-                    if(data.status === 'Ditolak') badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
-
-                    listContainer.innerHTML += `
-                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition duration-200 space-y-3">
-                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-50 pb-3">
-                                <div>
-                                    <h3 class="font-bold text-slate-800 text-base">${data.nama}</h3>
-                                    <p class="text-xs text-slate-500 font-medium">${data.tempatTugas} • <span class="text-blue-600">${data.bidang}</span></p>
-                                </div>
-                                <span class="px-3 py-1 rounded-full text-xs font-semibold border ${badgeColor} w-fit">${data.status}</span>
-                            </div>
-                            <div class="text-sm">
-                                <span class="inline-block bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium mb-2">${data.jenis}</span>
-                                <p class="text-slate-700 bg-slate-50/70 p-3 rounded-xl italic border border-slate-100">"${data.keterangan}"</p>
-                            </div>
-                            <div class="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100/50 text-xs text-slate-700">
-                                <span class="font-bold text-blue-900 block mb-1">Tanggapan / Solusi:</span>
-                                <p>${data.hasil && data.hasil !== '-' ? data.hasil : '<span class="text-slate-400 italic">Menunggu tanggapan dari tim kepegawaian...</span>'}</p>
-                            </div>
-                        </div>
-                    `;
-                });
+                rawConsultations = await response.json();
+                applyFilterAndRender();
             } catch (err) {
                 listContainer.innerHTML = `<div class="bg-rose-50 text-rose-600 p-4 rounded-xl text-sm border border-rose-100">Gagal memuat data: ${err.message}</div>`;
             }
+        };
+
+        const applyFilterAndRender = () => {
+            const listContainer = document.getElementById('listContainer');
+            const searchKeyword = (document.getElementById('searchInput')?.value || '').toLowerCase().trim();
+            const selectedStatus = document.getElementById('statusFilter')?.value || 'Semua';
+
+            const filteredData = rawConsultations.filter(item => {
+                const matchSearch = item.nama?.toLowerCase().includes(searchKeyword) || 
+                                    item.tempatTugas?.toLowerCase().includes(searchKeyword) ||
+                                    item.bidang?.toLowerCase().includes(searchKeyword) ||
+                                    item.jenis?.toLowerCase().includes(searchKeyword) ||
+                                    item.keterangan?.toLowerCase().includes(searchKeyword);
+                
+                const matchStatus = selectedStatus === 'Semua' || item.status === selectedStatus;
+                
+                return matchSearch && matchStatus;
+            });
+
+            const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
+            currentPage = Math.min(currentPage, totalPages);
+            const startIndex = (currentPage - 1) * pageSize;
+            const visibleData = filteredData.slice(startIndex, startIndex + pageSize);
+
+            listContainer.innerHTML = '';
+            if (filteredData.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center py-12 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                        <svg class="w-10 h-10 text-slate-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <p class="text-slate-400 text-sm font-medium">Tidak ada riwayat konsultasi yang cocok dengan pencarian.</p>
+                    </div>`;
+                updatePagination(0, 0);
+                return;
+            }
+
+            visibleData.forEach((data) => {
+                let badgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                if(data.status === 'Selesai') badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                if(data.status === 'Diproses') badgeColor = 'bg-blue-50 text-blue-700 border-blue-200';
+                if(data.status === 'Ditolak') badgeColor = 'bg-rose-50 text-rose-700 border-rose-200';
+
+                listContainer.innerHTML += `
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition duration-200 space-y-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-50 pb-3">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-base">${data.nama}</h3>
+                                <p class="text-xs text-slate-500 font-medium">${data.tempatTugas} • <span class="text-blue-600">${data.bidang}</span></p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold border ${badgeColor} w-fit">${data.status}</span>
+                        </div>
+                        <div class="text-sm">
+                            <span class="inline-block bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs font-medium mb-2">${data.jenis}</span>
+                            <p class="text-slate-700 bg-slate-50/70 p-3 rounded-xl italic border border-slate-100">"${data.keterangan}"</p>
+                        </div>
+                        <div class="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100/50 text-xs text-slate-700">
+                            <span class="font-bold text-blue-900 block mb-1">Tanggapan / Solusi:</span>
+                            <p>${data.hasil && data.hasil !== '-' ? data.hasil : '<span class="text-slate-400 italic">Menunggu tanggapan dari tim kepegawaian...</span>'}</p>
+                        </div>
+                    </div>
+                `;
+            });
+            updatePagination(filteredData.length, totalPages);
+        };
+
+        const updatePagination = (totalItems, totalPages) => {
+            const info = document.getElementById('paginationInfo');
+            const pageLabel = document.getElementById('pageLabel');
+            const prev = document.getElementById('prevPage');
+            const next = document.getElementById('nextPage');
+            if (!info || !pageLabel || !prev || !next) return;
+            const first = totalItems ? ((currentPage - 1) * pageSize) + 1 : 0;
+            const last = Math.min(currentPage * pageSize, totalItems);
+            info.textContent = `Menampilkan ${first}–${last} dari ${totalItems} konsultasi`;
+            pageLabel.textContent = `Halaman ${totalPages ? currentPage : 0} dari ${totalPages}`;
+            prev.disabled = currentPage <= 1;
+            next.disabled = currentPage >= totalPages;
+            prev.classList.toggle('opacity-40', prev.disabled);
+            next.classList.toggle('opacity-40', next.disabled);
+        };
+
+        const changePageSize = (value) => {
+            pageSize = value === 'semua' ? Math.max(rawConsultations.length, 1) : Number(value);
+            currentPage = 1;
+            applyFilterAndRender();
+        };
+
+        const movePage = (direction) => {
+            currentPage += direction;
+            applyFilterAndRender();
         };
 
         const submitForm = async (e) => {
@@ -130,7 +188,7 @@
     <!-- Toast Notification Container -->
     <div id="toastNotification" class="fixed bottom-5 right-5 z-50 transform translate-y-24 opacity-0 transition-all duration-300"></div>
 
-    <div class="max-w-3xl mx-auto space-y-8">
+    <div class="max-w-7xl mx-auto space-y-8">
         
         <!-- Header Banner -->
         <div class="bg-white/80 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -144,6 +202,8 @@
             </div>
         </div>
 
+        <!-- Formulir dan riwayat ditampilkan berdampingan -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <!-- Main Form Card -->
         <div class="bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
             <div class="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 text-white">
@@ -213,21 +273,63 @@
         </div>
 
         <!-- Consultation List Section -->
-        <div class="space-y-4 pt-4">
-            <div class="flex items-center justify-between">
+        <div class="space-y-4 min-w-0 bg-white/70 rounded-3xl border border-slate-100 shadow-sm p-4 md:p-5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                     <h2 class="text-xl font-bold text-slate-900">Riwayat Konsultasi Publik</h2>
                     <p class="text-slate-500 text-xs">Daftar seluruh tiket pertanyaan dan status penanganannya.</p>
                 </div>
-                <button onclick="renderList()" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 p-2.5 rounded-xl shadow-sm text-xs font-medium transition flex items-center space-x-1.5">
+                <button onclick="renderList()" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 px-3 py-2 rounded-xl shadow-sm text-xs font-medium transition flex items-center justify-center space-x-1.5 self-start sm:self-auto">
                     <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                     <span>Refresh</span>
                 </button>
+            </div>
+
+            <!-- Search & Filter Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div class="relative sm:col-span-2">
+                    <input type="text" id="searchInput" oninput="currentPage=1; applyFilterAndRender()" placeholder="Cari berdasarkan nama, instansi, atau kata kunci..." 
+                        class="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
+                <div>
+                    <select id="statusFilter" onchange="currentPage=1; applyFilterAndRender()" 
+                        class="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-700 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition shadow-sm">
+                        <option value="Semua">🔍 Semua Status</option>
+                        <option value="Menunggu">⏳ Menunggu</option>
+                        <option value="Diproses">🔄 Diproses</option>
+                        <option value="Selesai">✅ Selesai</option>
+                        <option value="Ditolak">❌ Ditolak</option>
+                    </select>
+                </div>
             </div>
             
             <div id="listContainer" class="space-y-3">
                 <!-- Data akan dimuat secara dinamis disini -->
             </div>
+            <div class="mt-4 pt-4 border-t border-slate-200 flex flex-col gap-3">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <label for="pageSizeSelect" class="text-xs font-medium text-slate-600">Jumlah riwayat ditampilkan</label>
+                    <select id="pageSizeSelect" onchange="changePageSize(this.value)" class="w-full sm:w-28 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="2" selected>2 terbaru</option>
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="semua">Semua</option>
+                    </select>
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <p id="paginationInfo" class="text-xs text-slate-500">Memuat data...</p>
+                    <div class="flex items-center gap-2">
+                        <button id="prevPage" type="button" onclick="movePage(-1)" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed">Sebelumnya</button>
+                        <span id="pageLabel" class="text-xs text-slate-500 whitespace-nowrap">Halaman 1</span>
+                        <button id="nextPage" type="button" onclick="movePage(1)" class="px-3 py-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed">Berikutnya</button>
+                    </div>
+                </div>
+            </div>
+        </div>
         </div>
 
     </div>
